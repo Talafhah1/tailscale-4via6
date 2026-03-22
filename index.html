@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tailscale 4via6 Calculator</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0f172a;
+        --card: #111827;
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #38bdf8;
+        --danger: #f87171;
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f8fafc;
+          --card: #ffffff;
+          --text: #0f172a;
+          --muted: #475569;
+          --accent: #0284c7;
+          --danger: #dc2626;
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 1rem;
+      }
+
+      .card {
+        width: min(840px, 100%);
+        background: var(--card);
+        border: 1px solid color-mix(in oklab, var(--muted) 30%, transparent);
+        border-radius: 14px;
+        padding: 1.2rem;
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.2);
+      }
+
+      h1 {
+        margin: 0 0 0.35rem;
+        font-size: 1.25rem;
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 1.05rem;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .section {
+        margin-top: 1.1rem;
+        padding-top: 1.1rem;
+        border-top: 1px solid color-mix(in oklab, var(--muted) 30%, transparent);
+      }
+
+      .grid {
+        margin-top: 1rem;
+        display: grid;
+        gap: 0.9rem;
+      }
+
+      @media (min-width: 760px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+
+      .field {
+        display: grid;
+        gap: 0.45rem;
+        align-content: start;
+      }
+
+      .split {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0.45rem;
+      }
+
+      .split input {
+        text-align: center;
+      }
+
+      .inline-note {
+        font-size: 0.9rem;
+        color: var(--muted);
+      }
+
+      label {
+        font-weight: 600;
+      }
+
+      input,
+      output {
+        font: inherit;
+      }
+
+      input {
+        border: 1px solid color-mix(in oklab, var(--muted) 40%, transparent);
+        background: transparent;
+        color: inherit;
+        border-radius: 10px;
+        padding: 0.65rem 0.75rem;
+        width: 100%;
+      }
+
+      .result {
+        margin-top: 1rem;
+        padding: 0.8rem;
+        border-radius: 10px;
+        background: color-mix(in oklab, var(--accent) 10%, transparent);
+        border: 1px solid color-mix(in oklab, var(--accent) 30%, transparent);
+        overflow-wrap: anywhere;
+        display: grid;
+        gap: 0.55rem;
+      }
+
+      .result-row {
+        display: grid;
+        grid-template-columns: 210px 1fr;
+        gap: 0.6rem;
+        align-items: baseline;
+      }
+
+      @media (max-width: 640px) {
+        .result-row {
+          grid-template-columns: 1fr;
+          gap: 0.2rem;
+        }
+      }
+
+      .error {
+        color: var(--danger);
+        margin-top: 0.5rem;
+        min-height: 1.2em;
+      }
+
+      .footer-link {
+        margin-top: 1rem;
+        padding-top: 0.85rem;
+        border-top: 1px solid color-mix(in oklab, var(--muted) 30%, transparent);
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .footer-link a {
+        color: var(--accent);
+      }
+
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Tailscale 4via6 calculator</h1>
+      <p>
+        Live conversion for 4via6 routes and MagicDNS names. 4via6 format:
+        <code>fd7a:115c:a1e0:b1a:0:SITE:YYYY:YYYY</code>.
+      </p>
+
+      <section class="section" aria-labelledby="calc-title">
+        <h2 id="calc-title">Network and host inputs</h2>
+        <div class="grid">
+          <div class="field">
+            <label>IPv4 network address</label>
+            <div class="split" role="group" aria-label="IPv4 network address">
+              <input id="net1" inputmode="numeric" placeholder="10" aria-label="Network octet 1" />
+              <input id="net2" inputmode="numeric" placeholder="1" aria-label="Network octet 2" />
+              <input id="net3" inputmode="numeric" placeholder="1" aria-label="Network octet 3" />
+              <input id="net4" inputmode="numeric" placeholder="0" aria-label="Network octet 4" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="cidrBits">IPv4 prefix length</label>
+            <input id="cidrBits" inputmode="numeric" placeholder="24" aria-describedby="cidr-help" />
+            <div id="cidr-help" class="inline-note">Valid range: 0 to 32.</div>
+          </div>
+
+          <div class="field">
+            <label for="site">Site ID</label>
+            <input id="site" placeholder="7 or 0x7" aria-describedby="site-help" />
+            <div id="site-help" class="inline-note">Decimal or 0x-prefixed hex, range 0 to 65535.</div>
+          </div>
+
+          <div class="field">
+            <label>Host IPv4 address for MagicDNS</label>
+            <div class="split" role="group" aria-label="Host IPv4 address">
+              <input id="host1" inputmode="numeric" placeholder="10" aria-label="Host octet 1" />
+              <input id="host2" inputmode="numeric" placeholder="1" aria-label="Host octet 2" />
+              <input id="host3" inputmode="numeric" placeholder="1" aria-label="Host octet 3" />
+              <input id="host4" inputmode="numeric" placeholder="16" aria-label="Host octet 4" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div id="error" class="error" role="alert" aria-live="polite"></div>
+      <div id="result" class="result">
+        <div class="result-row"><strong>IPv6 route</strong><code id="outRoute">Waiting for complete input</code></div>
+        <div class="result-row"><strong>Normalized IPv4 network</strong><code id="outV4">Waiting for complete input</code></div>
+        <div class="result-row"><strong>MagicDNS name</strong><code id="outMagic">Waiting for complete input</code></div>
+      </div>
+
+      <div class="footer-link">
+        Official docs:
+        <a href="https://tailscale.com/docs/features/subnet-routers/4via6-subnets" target="_blank" rel="noopener noreferrer"
+          >Tailscale 4via6 subnet routers</a
+        >
+      </div>
+    </main>
+
+    <script>
+      const TS_4VIA6_PREFIX = ["fd7a", "115c", "a1e0", "b1a", "0"];
+
+      function parseSiteId(raw) {
+        const value = raw.trim().toLowerCase();
+        if (!value) throw new Error("Site ID is required.");
+
+        let n;
+        if (value.startsWith("0x")) {
+          if (!/^0x[0-9a-f]+$/i.test(value)) throw new Error("Invalid hexadecimal site ID.");
+          n = Number.parseInt(value.slice(2), 16);
+        } else {
+          if (!/^\d+$/.test(value)) throw new Error("Site ID must be decimal or 0x-prefixed hex.");
+          n = Number.parseInt(value, 10);
+        }
+
+        if (!Number.isInteger(n) || n < 0 || n > 0xffff) throw new Error("Site ID must be between 0 and 65535.");
+        return n;
+      }
+
+      function parseOctet(raw, label) {
+        const value = raw.trim();
+        if (!/^\d+$/.test(value)) throw new Error(`${label} must be a decimal number.`);
+        const n = Number.parseInt(value, 10);
+        if (n < 0 || n > 255) throw new Error(`${label} must be between 0 and 255.`);
+        return n;
+      }
+
+      function parsePrefix(raw) {
+        const value = raw.trim();
+        if (!/^\d+$/.test(value)) throw new Error("IPv4 prefix length must be an integer.");
+        const prefix = Number.parseInt(value, 10);
+        if (prefix < 0 || prefix > 32) throw new Error("IPv4 prefix length must be between 0 and 32.");
+        return prefix;
+      }
+
+      function octetsToIPv4Int(octets) {
+        return (
+          (((octets[0] << 24) >>> 0) |
+            ((octets[1] << 16) >>> 0) |
+            ((octets[2] << 8) >>> 0) |
+            (octets[3] >>> 0)) >>>
+          0
+        );
+      }
+
+      function toIPv4String(v) {
+        return [v >>> 24, (v >>> 16) & 255, (v >>> 8) & 255, v & 255].join(".");
+      }
+
+      function to4via6Route(prefix, network32, site) {
+        const y1 = (network32 >>> 16) & 0xffff;
+        const y2 = network32 & 0xffff;
+        const ipv6Prefix = prefix + 96;
+        const hextets = [...TS_4VIA6_PREFIX, site.toString(16), y1.toString(16), y2.toString(16)];
+
+        return {
+          ipv6: `${hextets.join(":")}/${ipv6Prefix}`,
+          normalizedV4: `${toIPv4String(network32)}/${prefix}`,
+        };
+      }
+
+      function toMagicDNSName(host32, site) {
+        const q = host32 >>> 24;
+        const r = (host32 >>> 16) & 255;
+        const s = (host32 >>> 8) & 255;
+        const t = host32 & 255;
+        return `${q}-${r}-${s}-${t}-via-${site}`;
+      }
+
+      const inputIds = [
+        "net1",
+        "net2",
+        "net3",
+        "net4",
+        "cidrBits",
+        "site",
+        "host1",
+        "host2",
+        "host3",
+        "host4",
+      ];
+
+      const errorEl = document.getElementById("error");
+      const resultEl = document.getElementById("result");
+      const outRoute = document.getElementById("outRoute");
+      const outV4 = document.getElementById("outV4");
+      const outMagic = document.getElementById("outMagic");
+
+      function getValue(id) {
+        return document.getElementById(id).value.trim();
+      }
+
+      function fillZeroIfEmpty(inputEl) {
+        if (inputEl.value.trim() === "") {
+          inputEl.value = "0";
+        }
+      }
+
+      function updateLive() {
+        errorEl.textContent = "";
+        outRoute.textContent = "Enter network address, prefix length, and site ID";
+        outV4.textContent = "Enter network address, prefix length, and site ID";
+        outMagic.textContent = "Enter host IPv4 address and site ID";
+
+        const values = Object.fromEntries(inputIds.map((id) => [id, getValue(id)]));
+        const routeReady =
+          values.net1 &&
+          values.net2 &&
+          values.net3 &&
+          values.net4 &&
+          values.cidrBits &&
+          values.site;
+        const magicReady = values.host1 && values.host2 && values.host3 && values.host4 && values.site;
+
+        const errors = [];
+
+        if (routeReady) {
+          try {
+            const networkOctets = [
+              parseOctet(values.net1, "Network octet 1"),
+              parseOctet(values.net2, "Network octet 2"),
+              parseOctet(values.net3, "Network octet 3"),
+              parseOctet(values.net4, "Network octet 4"),
+            ];
+            const prefix = parsePrefix(values.cidrBits);
+            const site = parseSiteId(values.site);
+
+            const network32 = (() => {
+              const ip32 = octetsToIPv4Int(networkOctets);
+              const mask = prefix === 0 ? 0 : ((0xffffffff << (32 - prefix)) >>> 0);
+              return (ip32 & mask) >>> 0;
+            })();
+
+            const route = to4via6Route(prefix, network32, site);
+            outRoute.textContent = route.ipv6;
+            outV4.textContent = route.normalizedV4;
+          } catch (err) {
+            errors.push(err instanceof Error ? err.message : "Invalid route input.");
+          }
+        }
+
+        if (magicReady) {
+          try {
+            const hostOctets = [
+              parseOctet(values.host1, "Host octet 1"),
+              parseOctet(values.host2, "Host octet 2"),
+              parseOctet(values.host3, "Host octet 3"),
+              parseOctet(values.host4, "Host octet 4"),
+            ];
+            const site = parseSiteId(values.site);
+            const host32 = octetsToIPv4Int(hostOctets);
+            outMagic.textContent = toMagicDNSName(host32, site);
+          } catch (err) {
+            errors.push(err instanceof Error ? err.message : "Invalid MagicDNS input.");
+          }
+        }
+
+        if (errors.length > 0) {
+          errorEl.textContent = errors.join(" | ");
+        }
+      }
+
+      for (let i = 0; i < inputIds.length; i++) {
+        const inputEl = document.getElementById(inputIds[i]);
+
+        inputEl.addEventListener("input", updateLive);
+
+        inputEl.addEventListener("keydown", (event) => {
+          if (event.ctrlKey || event.metaKey || event.altKey) return;
+          if (event.key !== "." && event.key !== "/") return;
+
+          event.preventDefault();
+          fillZeroIfEmpty(inputEl);
+
+          const nextId = inputIds[i + 1];
+          if (!nextId) {
+            updateLive();
+            return;
+          }
+
+          const nextEl = document.getElementById(nextId);
+          fillZeroIfEmpty(nextEl);
+          nextEl.focus();
+          nextEl.select();
+          updateLive();
+        });
+      }
+    </script>
+  </body>
+</html>
