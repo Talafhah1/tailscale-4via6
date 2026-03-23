@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="4via6 favicon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#0369a1" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#bg)" />
+  <rect x="5" y="5" width="54" height="54" rx="10" fill="none" stroke="#7dd3fc" stroke-opacity="0.35" />
+  <text
+    x="32"
+    y="41"
+    text-anchor="middle"
+    font-family="Segoe UI, Arial, Helvetica, sans-serif"
+    font-size="26"
+    font-weight="800"
+    letter-spacing="0.4"
+    fill="#f0f9ff"
+  >
+    4v6
+  </text>
+</svg>
