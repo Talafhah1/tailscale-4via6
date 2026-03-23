@@ -89,16 +89,6 @@
         align-content: start;
       }
 
-      .split {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 0.45rem;
-      }
-
-      .split input {
-        text-align: center;
-      }
-
       .inline-note {
         font-size: 0.9rem;
         color: var(--muted);
@@ -179,38 +169,18 @@
       </p>
 
       <section class="section" aria-labelledby="calc-title">
-        <h2 id="calc-title">Network and host inputs</h2>
+        <h2 id="calc-title">Host and site inputs</h2>
         <div class="grid">
           <div class="field">
-            <label>IPv4 network address</label>
-            <div class="split" role="group" aria-label="IPv4 network address">
-              <input id="net1" inputmode="numeric" placeholder="10" aria-label="Network octet 1" />
-              <input id="net2" inputmode="numeric" placeholder="1" aria-label="Network octet 2" />
-              <input id="net3" inputmode="numeric" placeholder="1" aria-label="Network octet 3" />
-              <input id="net4" inputmode="numeric" placeholder="0" aria-label="Network octet 4" />
-            </div>
-          </div>
-
-          <div class="field">
-            <label for="cidrBits">IPv4 prefix length</label>
-            <input id="cidrBits" inputmode="numeric" placeholder="24" aria-describedby="cidr-help" />
-            <div id="cidr-help" class="inline-note">Valid range: 0 to 32.</div>
+            <label for="hostCidr">IPv4 host CIDR</label>
+            <input id="hostCidr" placeholder="192.168.0.100/24" aria-describedby="cidr-help" />
+            <div id="cidr-help" class="inline-note">Format: IPv4/prefix, for example 192.168.0.100/24.</div>
           </div>
 
           <div class="field">
             <label for="site">Site ID</label>
             <input id="site" placeholder="7 or 0x7" aria-describedby="site-help" />
             <div id="site-help" class="inline-note">Decimal or 0x-prefixed hex, range 0 to 65535.</div>
-          </div>
-
-          <div class="field">
-            <label>Host IPv4 address for MagicDNS</label>
-            <div class="split" role="group" aria-label="Host IPv4 address">
-              <input id="host1" inputmode="numeric" placeholder="10" aria-label="Host octet 1" />
-              <input id="host2" inputmode="numeric" placeholder="1" aria-label="Host octet 2" />
-              <input id="host3" inputmode="numeric" placeholder="1" aria-label="Host octet 3" />
-              <input id="host4" inputmode="numeric" placeholder="16" aria-label="Host octet 4" />
-            </div>
           </div>
         </div>
       </section>
@@ -220,6 +190,7 @@
         <div class="result-row"><strong>IPv6 route</strong><code id="outRoute">Waiting for complete input</code></div>
         <div class="result-row"><strong>Normalized IPv4 network</strong><code id="outV4">Waiting for complete input</code></div>
         <div class="result-row"><strong>MagicDNS name</strong><code id="outMagic">Waiting for complete input</code></div>
+        <div class="result-row"><strong>IPv6 host address</strong><code id="outHost6">Waiting for complete input</code></div>
       </div>
 
       <div class="footer-link">
@@ -266,6 +237,30 @@
         return prefix;
       }
 
+      function parseHostCIDR(raw) {
+        const value = raw.trim();
+        const match = value.match(/^([^/]+)\/(\d{1,2})$/);
+        if (!match) throw new Error("IPv4 host CIDR must be in format A.B.C.D/prefix.");
+
+        const ipPart = match[1].trim();
+        const prefix = parsePrefix(match[2]);
+        const octetText = ipPart.split(".");
+        if (octetText.length !== 4) throw new Error("IPv4 address must have exactly 4 octets.");
+
+        const hostOctets = [
+          parseOctet(octetText[0], "Host octet 1"),
+          parseOctet(octetText[1], "Host octet 2"),
+          parseOctet(octetText[2], "Host octet 3"),
+          parseOctet(octetText[3], "Host octet 4"),
+        ];
+
+        const host32 = octetsToIPv4Int(hostOctets);
+        const mask = prefix === 0 ? 0 : (0xffffffff << (32 - prefix)) >>> 0;
+        const network32 = (host32 & mask) >>> 0;
+
+        return { host32, network32, prefix };
+      }
+
       function octetsToIPv4Int(octets) {
         return (
           (((octets[0] << 24) >>> 0) |
@@ -300,91 +295,49 @@
         return `${q}-${r}-${s}-${t}-via-${site}`;
       }
 
-      const inputIds = [
-        "net1",
-        "net2",
-        "net3",
-        "net4",
-        "cidrBits",
-        "site",
-        "host1",
-        "host2",
-        "host3",
-        "host4",
-      ];
+      function to4via6HostAddress(host32, site) {
+        const y1 = (host32 >>> 16) & 0xffff;
+        const y2 = host32 & 0xffff;
+        const hextets = [...TS_4VIA6_PREFIX, site.toString(16), y1.toString(16), y2.toString(16)];
+        return hextets.join(":");
+      }
+
+      const inputIds = ["hostCidr", "site"];
 
       const errorEl = document.getElementById("error");
-      const resultEl = document.getElementById("result");
       const outRoute = document.getElementById("outRoute");
       const outV4 = document.getElementById("outV4");
       const outMagic = document.getElementById("outMagic");
+      const outHost6 = document.getElementById("outHost6");
 
       function getValue(id) {
         return document.getElementById(id).value.trim();
       }
 
-      function fillZeroIfEmpty(inputEl) {
-        if (inputEl.value.trim() === "") {
-          inputEl.value = "0";
-        }
-      }
-
       function updateLive() {
         errorEl.textContent = "";
-        outRoute.textContent = "Enter network address, prefix length, and site ID";
-        outV4.textContent = "Enter network address, prefix length, and site ID";
-        outMagic.textContent = "Enter host IPv4 address and site ID";
+        outRoute.textContent = "Enter host CIDR and site ID";
+        outV4.textContent = "Enter host CIDR and site ID";
+        outMagic.textContent = "Enter host CIDR and site ID";
+        outHost6.textContent = "Enter host CIDR and site ID";
 
         const values = Object.fromEntries(inputIds.map((id) => [id, getValue(id)]));
-        const routeReady =
-          values.net1 &&
-          values.net2 &&
-          values.net3 &&
-          values.net4 &&
-          values.cidrBits &&
-          values.site;
-        const magicReady = values.host1 && values.host2 && values.host3 && values.host4 && values.site;
+        const ready = values.hostCidr && values.site;
 
         const errors = [];
 
-        if (routeReady) {
+        if (ready) {
           try {
-            const networkOctets = [
-              parseOctet(values.net1, "Network octet 1"),
-              parseOctet(values.net2, "Network octet 2"),
-              parseOctet(values.net3, "Network octet 3"),
-              parseOctet(values.net4, "Network octet 4"),
-            ];
-            const prefix = parsePrefix(values.cidrBits);
+            const hostCidr = parseHostCIDR(values.hostCidr);
             const site = parseSiteId(values.site);
 
-            const network32 = (() => {
-              const ip32 = octetsToIPv4Int(networkOctets);
-              const mask = prefix === 0 ? 0 : ((0xffffffff << (32 - prefix)) >>> 0);
-              return (ip32 & mask) >>> 0;
-            })();
-
-            const route = to4via6Route(prefix, network32, site);
+            const route = to4via6Route(hostCidr.prefix, hostCidr.network32, site);
             outRoute.textContent = route.ipv6;
             outV4.textContent = route.normalizedV4;
+            outMagic.textContent = toMagicDNSName(hostCidr.host32, site);
+            outHost6.textContent = to4via6HostAddress(hostCidr.host32, site);
           } catch (err) {
-            errors.push(err instanceof Error ? err.message : "Invalid route input.");
-          }
-        }
-
-        if (magicReady) {
-          try {
-            const hostOctets = [
-              parseOctet(values.host1, "Host octet 1"),
-              parseOctet(values.host2, "Host octet 2"),
-              parseOctet(values.host3, "Host octet 3"),
-              parseOctet(values.host4, "Host octet 4"),
-            ];
-            const site = parseSiteId(values.site);
-            const host32 = octetsToIPv4Int(hostOctets);
-            outMagic.textContent = toMagicDNSName(host32, site);
-          } catch (err) {
-            errors.push(err instanceof Error ? err.message : "Invalid MagicDNS input.");
+            errors.push(err instanceof Error ? err.message : "Invalid input.");
           }
         }
 
@@ -395,28 +348,7 @@
 
       for (let i = 0; i < inputIds.length; i++) {
         const inputEl = document.getElementById(inputIds[i]);
-
         inputEl.addEventListener("input", updateLive);
-
-        inputEl.addEventListener("keydown", (event) => {
-          if (event.ctrlKey || event.metaKey || event.altKey) return;
-          if (event.key !== "." && event.key !== "/") return;
-
-          event.preventDefault();
-          fillZeroIfEmpty(inputEl);
-
-          const nextId = inputIds[i + 1];
-          if (!nextId) {
-            updateLive();
-            return;
-          }
-
-          const nextEl = document.getElementById(nextId);
-          fillZeroIfEmpty(nextEl);
-          nextEl.focus();
-          nextEl.select();
-          updateLive();
-        });
       }
     </script>
   </body>

@@ -25,8 +25,3 @@ Minimal static web app for GitHub Pages that helps with:
 - MagicDNS host format from docs is:
   - `Q-R-S-T-via-X`
   - where `Q.R.S.T` is the IPv4 host and `X` is the site ID.
-
-## Files
-
-- [index.html](index.html): static app (no build step)
-- [CNAME](CNAME): custom domain for GitHub Pages
